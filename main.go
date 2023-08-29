@@ -21,7 +21,7 @@ var (
 	alnumlen   = len(alnum)
 	delay      = flag.Duration("d", time.Second*3, "Maximum delay between sending random data to client")
 	addr       = flag.String("a", ":2222", "IP addr:port to listen on")
-	lineLength = flag.Uint64("l", 128, "Maxium length of line sent every [delay] seconds")
+	lineLength = flag.Uint64("l", 1400, "Maxium length of line sent every [delay] seconds")
 )
 
 func main() {
@@ -47,6 +47,7 @@ func handle(c net.Conn) {
 	var err error
 	var wt int64 // Write() total bytes
 	defer c.Close()
+	start := time.Now()
 	connid := makeConnID(c)
 	remoteaddr := c.RemoteAddr().String()
 	log.Printf("[%s] Connection from %s", connid, c.RemoteAddr())
@@ -55,7 +56,7 @@ func handle(c net.Conn) {
 	// There should be nothing, but better to be safe.
 	err = c.SetDeadline(time.Now().Add(time.Second))
 	if err != nil {
-		log.Printf("could not set deadline for Read(): %s", err)
+		log.Printf("%s] %s could not set deadline for Read(): %s", connid, remoteaddr, err)
 		return // Exit Goroutine
 	}
 	for n := 0; n < len(readbuf); n, err = c.Read(readbuf) {
@@ -78,7 +79,7 @@ func handle(c net.Conn) {
 	for {
 		err = c.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
-			log.Printf("could not set deadline for Write(): %s", err)
+			log.Printf("[%s] %s could not set deadline for Write(): %s", connid, remoteaddr, err)
 			return
 		}
 		//nolint:gosec // not a security problem
@@ -86,12 +87,12 @@ func handle(c net.Conn) {
 		n, err := c.Write(data)
 		wt += int64(n)
 		if err != nil || n == 0 {
-			log.Printf("[%s] %s Connection closed, wrote %d bytes", connid, remoteaddr, wt)
+			log.Printf("[%s] %s Connection closed, wrote %d bytes over %s", connid, remoteaddr, wt, time.Since(start))
 			return // Exit Goroutine
 		}
 		//nolint:gosec // not a security problem
 		randsleep := time.Duration(float64(*delay) * rand.Float64())
-		log.Printf("[%s] %s Sent %d bytes, sleeping %s", connid, remoteaddr, n, randsleep)
+		// log.Printf("[%s] %s Sent %d bytes, sleeping %s", connid, remoteaddr, n, randsleep)
 		time.Sleep(randsleep)
 	}
 }
